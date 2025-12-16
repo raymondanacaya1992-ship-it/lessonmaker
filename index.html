@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduQuest | Manual Save Mode</title>
+    <title>EduQuest | Interactive Learning</title>
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -36,7 +36,6 @@
         .btn-primary:hover { background-color: var(--primary-dark); }
         .btn-secondary { background-color: var(--secondary); color: white; }
         .btn-success { background-color: var(--secondary); color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
-        .btn-success:hover { background-color: var(--secondary-dark); transform: translateY(-1px); }
         .btn-danger { background-color: var(--danger); color: white; }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
         .btn-outline:hover { background: #e6f0fa; }
@@ -48,16 +47,12 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .hidden { display: none !important; }
 
-        /* --- Tabs --- */
-        .tabs { display: flex; gap: 10px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
-        .tab-btn { padding: 10px 20px; background: none; border: none; cursor: pointer; font-weight: 600; color: var(--text-light); border-bottom: 3px solid transparent; }
-        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
-
         /* --- Header --- */
         header { background: var(--surface); box-shadow: var(--shadow); padding: 15px 0; position: sticky; top: 0; z-index: 100; }
         .nav-wrapper { display: flex; justify-content: space-between; align-items: center; }
         .logo { font-size: 1.5rem; font-weight: 800; color: var(--primary); cursor: pointer; }
-        
+        .user-controls { display: flex; gap: 10px; align-items: center; }
+
         /* --- Views --- */
         .view-section { padding-top: 20px; animation: fadeIn 0.3s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -83,6 +78,12 @@
         .unsaved-dot { width: 10px; height: 10px; background-color: var(--danger); border-radius: 50%; display: inline-block; margin-right: 5px; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
+        /* Dashboard Tabs */
+        .tabs { display: flex; gap: 10px; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+        .tab-btn { padding: 10px 20px; background: none; border: none; cursor: pointer; font-weight: 600; color: var(--text-light); border-bottom: 3px solid transparent; }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 20px; }
+
         /* Tables */
         table { width: 100%; border-collapse: collapse; margin-top: 10px; min-width: 600px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
@@ -103,33 +104,34 @@
             <div class="logo" onclick="app.router.go('landing')">
                 <span>🎓 EduQuest</span>
             </div>
-            <div class="user-controls" id="header-controls"></div>
+            <div class="user-controls" id="header-controls">
+                <!-- Log In / Log Out buttons appear here via JS -->
+            </div>
         </div>
     </header>
 
     <main class="container">
         <div id="main-spinner" class="spinner"></div>
 
-        <!-- VIEW: Landing -->
-        <div id="view-landing" class="view-section hidden">
+        <!-- VIEW: Landing (NO 'hidden' class here, so it's visible by default) -->
+        <div id="view-landing" class="view-section">
             <h1>Welcome to EduQuest</h1>
-            <p style="color: var(--text-light);">Choose your path.</p>
+            <p style="color: var(--text-light);">Select a subject to start.</p>
             <div class="subject-cards">
                 <div class="subject-card subject-math" onclick="app.logic.selectSubject('math')">🧮 Math</div>
                 <div class="subject-card subject-science" onclick="app.logic.selectSubject('science')">🧬 Science</div>
             </div>
-            <div style="margin-top: 60px;">
-                <button class="btn btn-outline" onclick="app.router.go('teacher-login')">Teacher Dashboard</button>
-                <div id="admin-entry" class="hidden" style="margin-top:10px;">
-                    <button class="btn btn-secondary btn-sm" onclick="app.router.go('admin')">Admin Panel</button>
-                </div>
+            
+            <!-- Hidden Admin Button (Only shows for Raymond) -->
+            <div id="admin-entry" class="hidden" style="margin-top:40px; text-align:center;">
+                <button class="btn btn-secondary btn-sm" onclick="app.router.go('admin')">Admin Panel</button>
             </div>
         </div>
 
         <!-- VIEW: Library -->
         <div id="view-library" class="view-section hidden">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <button class="btn btn-outline" onclick="app.router.go('landing')">← Back</button>
+                <button class="btn btn-outline" onclick="app.router.go('landing')">← Back to Subjects</button>
                 <button class="btn btn-secondary btn-sm" onclick="app.logic.refreshContent()">🔄 Refresh Content</button>
             </div>
             
@@ -152,7 +154,6 @@
         <!-- VIEW: Game Player -->
         <div id="view-game" class="view-section hidden">
             <div style="display:flex; justify-content:space-between; margin-bottom:15px; align-items:center; background: #fff; padding: 10px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <!-- Exit triggers save -->
                 <button class="btn btn-outline" onclick="app.logic.exitGame()">← Save & Exit</button>
                 
                 <div style="text-align: center;">
@@ -162,10 +163,9 @@
                     </span>
                 </div>
 
-                <!-- MANUAL SAVE BUTTON -->
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <span id="game-current-score" class="badge" style="font-size: 1rem;">Score: 0</span>
-                    <button class="btn btn-success" onclick="app.logic.saveScoreManual()">💾 Save Now</button>
+                    <button class="btn btn-success" onclick="app.logic.saveScoreManual()">💾 Save</button>
                 </div>
             </div>
             <iframe id="game-frame" sandbox="allow-scripts allow-modals"></iframe>
@@ -175,7 +175,7 @@
         <div id="view-dashboard" class="view-section hidden">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h2>Teacher Dashboard</h2>
-                <button class="btn btn-outline btn-sm" onclick="app.auth.logout()">Sign Out</button>
+                <button class="btn btn-outline btn-sm" onclick="app.router.go('landing')">Back to Home</button>
             </div>
 
             <div class="tabs">
@@ -184,9 +184,9 @@
                 <button class="tab-btn" onclick="app.dashboard.switchTab('grades')">Gradebook</button>
             </div>
 
-            <!-- Tab 1: Manage Class -->
+            <!-- Tab 1: Class -->
             <div id="tab-class" class="dashboard-tab">
-                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+                <div class="dashboard-grid">
                     <div class="card">
                         <h3>Add Student</h3>
                         <input type="text" id="new-student-name" class="input" placeholder="Full Name">
@@ -220,7 +220,7 @@
                 </div>
             </div>
 
-            <!-- Tab 3: Gradebook -->
+            <!-- Tab 3: Grades -->
             <div id="tab-grades" class="dashboard-tab hidden">
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -249,16 +249,24 @@
         <div id="view-student-login" class="view-section hidden">
             <div class="card" style="max-width:400px; margin:50px auto; text-align:center;">
                 <h2>Student Access</h2>
-                <input type="text" id="student-login-code" class="input" placeholder="Enter Login Code">
+                <p style="margin-bottom:15px; color:#666;">Enter the code from your teacher.</p>
+                <input type="text" id="student-login-code" class="input" placeholder="e.g. alex-123">
                 <button class="btn btn-secondary" onclick="app.auth.loginStudent()">Enter Classroom</button>
-                <div style="margin-top:20px;"><button class="btn btn-sm btn-outline" onclick="app.router.go('landing')">Back</button></div>
+                <div style="margin-top:20px;">
+                    <button class="btn btn-sm btn-outline" onclick="app.router.go('landing')">Cancel</button>
+                    <br><br>
+                    <a href="#" style="font-size:0.8rem;" onclick="app.router.go('teacher-login')">Are you a Teacher?</a>
+                </div>
             </div>
         </div>
 
         <!-- VIEW: Admin -->
         <div id="view-admin" class="view-section hidden">
-            <h2>Admin Panel</h2>
-            <div class="card" id="admin-form">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>Admin Panel</h2>
+                <button class="btn btn-outline" onclick="app.router.go('landing')">Exit Admin</button>
+            </div>
+            <div class="card" id="admin-form" style="margin-top:20px;">
                 <h3>Create New Lesson</h3>
                 <input type="text" id="admin-title" class="input" placeholder="Title">
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
@@ -283,6 +291,7 @@
         import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, deleteDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
+        // FIREBASE CONFIG
         const firebaseConfig = {
             apiKey: "AIzaSyCYVPsTnfNnyYfmgyKqeTtIAg5qf-ganS4",
             authDomain: "visualizationpractice.firebaseapp.com",
@@ -307,7 +316,7 @@
             games: [],
             students: [],
             currentGameId: null,
-            pendingScore: null // Temporarily holds score until "Save" is clicked
+            pendingScore: null
         };
 
         const ui = {
@@ -359,6 +368,7 @@
                 if (state.userType === 'teacher') await signOut(auth);
                 state.userType = null;
                 state.currentUser = null;
+                state.studentId = null;
                 localStorage.removeItem('edu_student_id');
                 router.go('landing');
             },
@@ -368,8 +378,9 @@
                         state.userType = 'teacher';
                         state.currentUser = user;
                         ui.showAdminEntry(user.email === ADMIN_EMAIL);
-                        if(!document.getElementById('view-teacher-login').classList.contains('hidden')) router.go('dashboard');
-                    } else ui.showAdminEntry(false);
+                    } else {
+                        ui.showAdminEntry(false);
+                    }
                     updateHeader();
                 });
                 const sid = localStorage.getItem('edu_student_id');
@@ -466,6 +477,12 @@
 
         const logic = {
             selectSubject: async (subj) => {
+                // AUTH CHECK: Must be logged in
+                if (!state.currentUser) {
+                    router.go('student-login');
+                    return;
+                }
+
                 state.selectedSubject = subj;
                 ui.spinner(true);
                 const cacheKey = `edu_cache_${subj}`;
@@ -537,7 +554,7 @@
             },
             launchGame: (game) => {
                 state.currentGameId = game.gameId;
-                state.pendingScore = null; // Reset
+                state.pendingScore = null; 
                 ui.toggleUnsavedIndicator(false);
                 document.getElementById('game-player-title').textContent = game.title;
                 const iframe = document.getElementById('game-frame');
@@ -545,51 +562,37 @@
                 router.go('game');
             },
 
-            // --- SAVE LOGIC ---
             handleScoreUpdate: (data) => {
                 if(state.userType !== 'student') return;
-                
-                // 1. Update Memory & UI
                 state.pendingScore = {
                     score: data.score,
                     total: data.total || 0,
                     correct: data.correct || 0,
                     date: new Date().toISOString()
                 };
-                
                 document.getElementById('game-current-score').textContent = `Score: ${data.score}`;
-                ui.toggleUnsavedIndicator(true); // Show red dot
+                ui.toggleUnsavedIndicator(true); 
             },
 
             saveScoreManual: async () => {
                 if(!state.pendingScore || !state.studentId) return;
-                
                 ui.spinner(true);
                 try {
                     const ref = doc(db, "students", state.studentId);
-                    await updateDoc(ref, {
-                        [`scores.${state.currentGameId}`]: state.pendingScore
-                    });
+                    await updateDoc(ref, { [`scores.${state.currentGameId}`]: state.pendingScore });
                     ui.toast("Progress Saved to Cloud! ☁️");
                     ui.toggleUnsavedIndicator(false);
-                    state.pendingScore = null; // Clear pending
-                } catch(e) {
-                    alert("Save failed. Check internet.");
-                }
+                    state.pendingScore = null; 
+                } catch(e) { alert("Save failed. Check internet."); }
                 ui.spinner(false);
             },
 
             exitGame: async () => {
-                // Check if we have unsaved data
                 if(state.pendingScore) {
-                    const confirmSave = confirm("You have unsaved progress. Save before exiting?");
-                    if(confirmSave) {
-                        await logic.saveScoreManual();
-                    }
+                    if(confirm("You have unsaved progress. Save before exiting?")) await logic.saveScoreManual();
                 }
                 router.go('library');
             },
-            // ------------------
 
             addGame: async () => {
                 const title = document.getElementById('admin-title').value;
@@ -636,9 +639,27 @@
 
         function updateHeader() {
             const h = document.getElementById('header-controls');
-            if(state.userType === 'student') h.innerHTML = `<span>Hi, ${state.currentUser.name}</span>`;
-            else if(state.userType === 'teacher') h.innerHTML = `<button class="btn btn-primary btn-sm" onclick="app.router.go('dashboard')">Dashboard</button>`;
-            else h.innerHTML = `<button class="btn btn-primary btn-sm" onclick="app.router.go('teacher-login')">Log In</button>`;
+            // GUEST
+            if(!state.userType) {
+                h.innerHTML = `
+                    <button class="btn btn-outline btn-sm" onclick="app.router.go('teacher-login')">Teacher Login</button>
+                    <button class="btn btn-primary btn-sm" onclick="app.router.go('student-login')">Student Login</button>
+                `;
+            } 
+            // STUDENT
+            else if(state.userType === 'student') {
+                h.innerHTML = `
+                    <span style="font-weight:bold; margin-right:10px;">Hi, ${state.currentUser.name}</span>
+                    <button class="btn btn-outline btn-sm" onclick="app.auth.logout()">Sign Out</button>
+                `;
+            } 
+            // TEACHER
+            else if(state.userType === 'teacher') {
+                h.innerHTML = `
+                    <button class="btn btn-primary btn-sm" onclick="app.router.go('dashboard')">Dashboard</button>
+                    <button class="btn btn-outline btn-sm" onclick="app.auth.logout()">Sign Out</button>
+                `;
+            }
         }
 
         window.addEventListener('message', (e) => {
