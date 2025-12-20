@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduQuest | Smart Score Edition</title>
+    <title>EduQuest | Smart Score & Teacher Tools</title>
     
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
@@ -185,6 +185,8 @@
                 <button class="tab-btn" onclick="app.dashboard.switchTab('assign')">Assignments</button>
                 <button class="tab-btn" onclick="app.dashboard.switchTab('grades')">Gradebook</button>
             </div>
+            
+            <!-- Tab 1: Manage Class -->
             <div id="tab-class" class="dashboard-tab">
                 <div class="dashboard-grid">
                     <div class="card">
@@ -199,6 +201,8 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tab 2: Assignments -->
             <div id="tab-assign" class="dashboard-tab hidden">
                 <div class="card">
                     <h3>Assign Lesson to Class</h3>
@@ -209,12 +213,41 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Tab 3: Grades (UPDATED with Filters) -->
             <div id="tab-grades" class="dashboard-tab hidden">
                 <div class="card">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
                         <h3>Class Performance</h3>
                         <button class="btn btn-secondary btn-sm" onclick="app.dashboard.exportCSV()">Download CSV 📥</button>
                     </div>
+
+                    <!-- NEW: Filters for Gradebook -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: bold; color: #666;">Filter by Grade</label>
+                            <select id="gb-filter-grade" class="input" style="margin-bottom:0;" onchange="app.dashboard.filterGradebook()">
+                                <option value="">All Grades</option>
+                                <option value="K">K</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: bold; color: #666;">Filter by Subject</label>
+                            <select id="gb-filter-subject" class="input" style="margin-bottom:0;" onchange="app.dashboard.filterGradebook()">
+                                <option value="">All Subjects</option>
+                                <option value="math">Math</option>
+                                <option value="science">Science</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: bold; color: #666;">Filter by Game</label>
+                            <select id="gb-filter-game" class="input" style="margin-bottom:0;" onchange="app.dashboard.renderGradebookTable()">
+                                <option value="">All Games</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
                     <div class="table-container">
                         <table><thead><tr><th>Student</th><th>Game Title</th><th>Score</th><th>Questions</th><th>Correct</th><th>Date</th></tr></thead><tbody id="gradebook-body"></tbody></table>
                     </div>
@@ -287,7 +320,7 @@
         db = getFirestore(appInstance);
         auth = getAuth(appInstance);
 
-        const state = { userType: null, currentUser: null, studentId: null, selectedSubject: null, games: [], students: [], currentGameId: null, pendingScore: null };
+        const state = { userType: null, currentUser: null, studentId: null, selectedSubject: null, games: [], students: [], currentGameId: null, pendingScore: null, allGamesMap: {} };
         const ui = {
             spinner: (show) => document.getElementById('main-spinner').style.display = show ? 'block' : 'none',
             toast: (msg) => { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 3000); },
@@ -314,7 +347,18 @@
             logout: async () => { if (state.userType === 'teacher') await signOut(auth); state.userType = null; state.currentUser = null; state.studentId = null; localStorage.removeItem('edu_student_id'); router.go('landing'); },
             check: () => {
                 onAuthStateChanged(auth, (user) => {
-                    if (user) { state.userType = 'teacher'; state.currentUser = user; ui.showAdminEntry(user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()); if(state.selectedSubject) logic.renderLibrary(); } else ui.showAdminEntry(false);
+                    if (user) { 
+                        state.userType = 'teacher'; 
+                        state.currentUser = user; 
+                        ui.showAdminEntry(user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()); 
+                        // DIRECT DASHBOARD REDIRECT FOR TEACHER
+                        const currentView = document.querySelector('.view-section:not(.hidden)').id;
+                        if(currentView === 'view-teacher-login' || currentView === 'view-landing') {
+                             router.go('dashboard');
+                        }
+                    } else {
+                        ui.showAdminEntry(false);
+                    }
                     updateHeader();
                 });
                 const sid = localStorage.getItem('edu_student_id');
@@ -328,7 +372,72 @@
             deleteStudent: async (id) => { if(confirm("Delete student?")) { await deleteDoc(doc(db, "students", id)); dashboard.loadStudents(); } },
             loadAssignableGames: async () => { const subj = document.getElementById('assign-subject').value; const snap = await getDocs(query(collection(db, "games"), where("subject", "==", subj))); const select = document.getElementById('assign-game'); select.innerHTML = '<option value="">Select a Game...</option>'; snap.forEach(d => select.innerHTML += `<option value="${d.data().gameId}">${d.data().title}</option>`); },
             assignGameToClass: async () => { const gameId = document.getElementById('assign-game').value; if(!gameId) return alert("Select a game"); ui.spinner(true); const snap = await getDocs(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid))); await Promise.all(snap.docs.map(d => updateDoc(doc(db, "students", d.id), { assignments: arrayUnion(gameId) }))); ui.spinner(false); ui.toast("Assigned!"); },
-            loadGrades: async () => { await dashboard.loadStudents(); const gameSnap = await getDocs(collection(db, "games")); const gameMap = {}; gameSnap.forEach(d => gameMap[d.data().gameId] = d.data().title); const tbody = document.getElementById('gradebook-body'); tbody.innerHTML = ''; state.students.forEach(s => { if(!s.scores) return; Object.keys(s.scores).forEach(gameId => { const data = s.scores[gameId]; const scoreVal = typeof data === 'object' ? data.score : data; tbody.innerHTML += `<tr><td>${s.name}</td><td>${gameMap[gameId] || 'Unknown'}</td><td><b>${scoreVal}</b></td><td>${data.total||'-'}</td><td>${data.correct||'-'}</td><td>${data.date ? new Date(data.date).toLocaleDateString() : '-'}</td></tr>`; }); }); },
+            
+            // --- UPDATED GRADEBOOK LOGIC ---
+            loadGrades: async () => {
+                await dashboard.loadStudents();
+                // Fetch ALL games to cache metadata for dropdowns
+                const gameSnap = await getDocs(collection(db, "games"));
+                state.allGamesMap = {};
+                gameSnap.forEach(d => state.allGamesMap[d.data().gameId] = d.data());
+                
+                // Initial filter run (populates dropdowns with everything)
+                dashboard.filterGradebook();
+            },
+
+            filterGradebook: () => {
+                const gradeFilter = document.getElementById('gb-filter-grade').value;
+                const subjectFilter = document.getElementById('gb-filter-subject').value;
+                const gameSelect = document.getElementById('gb-filter-game');
+                
+                // 1. Populate Game Dropdown based on Grade/Subject filters
+                let optionsHtml = '<option value="">All Games</option>';
+                Object.values(state.allGamesMap).forEach(g => {
+                    const matchGrade = !gradeFilter || g.grade === gradeFilter;
+                    const matchSubject = !subjectFilter || g.subject === subjectFilter;
+                    if(matchGrade && matchSubject) {
+                        optionsHtml += `<option value="${g.gameId}">${g.title}</option>`;
+                    }
+                });
+                // Keep currently selected game if it still exists in filter, else reset
+                const currentVal = gameSelect.value;
+                gameSelect.innerHTML = optionsHtml;
+                if(currentVal && gameSelect.querySelector(`option[value="${currentVal}"]`)) {
+                     gameSelect.value = currentVal;
+                }
+
+                // 2. Render Table
+                dashboard.renderGradebookTable();
+            },
+
+            renderGradebookTable: () => {
+                const gradeFilter = document.getElementById('gb-filter-grade').value;
+                const subjectFilter = document.getElementById('gb-filter-subject').value;
+                const gameFilter = document.getElementById('gb-filter-game').value; // Specific ID
+                
+                const tbody = document.getElementById('gradebook-body');
+                tbody.innerHTML = '';
+                
+                state.students.forEach(s => {
+                    if(!s.scores) return;
+                    Object.keys(s.scores).forEach(gameId => {
+                        const gameMeta = state.allGamesMap[gameId];
+                        if(!gameMeta) return; // Skip deleted games
+
+                        // Apply Filters
+                        const matchGrade = !gradeFilter || gameMeta.grade === gradeFilter;
+                        const matchSubject = !subjectFilter || gameMeta.subject === subjectFilter;
+                        const matchGame = !gameFilter || gameId === gameFilter;
+
+                        if (matchGrade && matchSubject && matchGame) {
+                            const data = s.scores[gameId];
+                            const scoreVal = typeof data === 'object' ? data.score : data;
+                            tbody.innerHTML += `<tr><td>${s.name}</td><td>${gameMeta.title}</td><td><b>${scoreVal}</b></td><td>${data.total||'-'}</td><td>${data.correct||'-'}</td><td>${data.date ? new Date(data.date).toLocaleDateString() : '-'}</td></tr>`;
+                        }
+                    });
+                });
+            },
+            
             exportCSV: () => { const rows = [["Student Name", "Game ID", "Score", "Total", "Correct", "Date"]]; state.students.forEach(s => { if(s.scores) Object.keys(s.scores).forEach(gid => { const d = s.scores[gid]; rows.push([s.name, gid, d.score||d, d.total||'', d.correct||'', d.date||'']); }); }); const link = document.createElement("a"); link.href = encodeURI("data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n")); link.download = "gradebook.csv"; document.body.appendChild(link); link.click(); }
         };
 
@@ -353,26 +462,19 @@
                 if(filtered.length === 0) grid.innerHTML = "<p>No lessons found locally. Try Refreshing Content.</p>";
                 filtered.forEach(g => { const isAssigned = assignments.includes(g.gameId); const el = document.createElement('div'); el.className = 'card game-card'; el.innerHTML = `${isAdmin ? `<div class="admin-delete-btn" title="Delete Lesson" onclick="event.stopPropagation(); app.logic.deleteGame('${g.docId}')">✕</div>` : ''}<div><h3>${g.title}</h3><div class="game-badges"><span class="badge">Grade ${g.grade}</span><span class="badge">${g.topic}</span>${isAssigned ? '<span class="badge badge-assigned">⭐ Assigned</span>' : ''}</div></div><div style="margin-top:15px; text-align:right;"><button class="btn btn-primary btn-sm">Play ▶</button></div>`; el.onclick = () => logic.launchGame(g); grid.appendChild(el); });
             },
-            // --- UPDATED LAUNCH GAME LOGIC ---
             launchGame: (game) => {
                 state.currentGameId = game.gameId;
                 state.pendingScore = null;
                 ui.toggleUnsavedIndicator(false);
                 document.getElementById('game-player-title').textContent = game.title;
-                
-                // 1. Retrieve previous score from Firestore data
                 let savedScore = 0;
                 if (state.currentUser && state.currentUser.scores && state.currentUser.scores[game.gameId]) {
                     const data = state.currentUser.scores[game.gameId];
                     savedScore = (typeof data === 'object') ? (data.score || 0) : data;
                 }
-
-                // 2. Inject Score into Iframe
                 const iframe = document.getElementById('game-frame');
-                // We prepend the score script to the game code so it loads FIRST
                 const scoreScript = `<script>window.INITIAL_SCORE = ${savedScore};<\/script>`;
                 iframe.srcdoc = scoreScript + game.htmlCode;
-
                 router.go('game');
             },
             handleScoreUpdate: (data) => {
