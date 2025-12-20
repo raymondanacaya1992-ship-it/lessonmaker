@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EduQuest | Smart Score & Teacher Tools</title>
+    <title>EduQuest | Teacher Power Tools</title>
     
     <!-- Favicon -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎓</text></svg>">
@@ -104,6 +104,11 @@
         .toast { position: fixed; bottom: 20px; right: 20px; background: #333; color: white; padding: 12px 24px; border-radius: 8px; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 1000; }
         .toast.show { opacity: 1; transform: translateY(-10px); }
         textarea { height: 150px; font-family: monospace; }
+        
+        /* Assignment Selection */
+        .assignment-row { display: flex; align-items: center; padding: 8px; border-bottom: 1px solid #eee; }
+        .assignment-row:last-child { border-bottom: none; }
+        .checkbox-custom { width: 18px; height: 18px; margin-right: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -191,9 +196,19 @@
                 <div class="dashboard-grid">
                     <div class="card">
                         <h3>Add Student</h3>
-                        <input type="text" id="new-student-name" class="input" placeholder="Full Name">
-                        <button class="btn btn-primary" onclick="app.dashboard.createStudent()">Create Student</button>
-                        <div id="new-student-result" style="margin-top: 10px; color: var(--primary); font-weight:bold;"></div>
+                        <p style="font-size:0.8rem; color:#666; margin-bottom:5px;">Single Add:</p>
+                        <div style="display:flex; gap:5px; margin-bottom:15px;">
+                            <input type="text" id="new-student-name" class="input" placeholder="Full Name" style="margin-bottom:0;">
+                            <button class="btn btn-primary btn-sm" onclick="app.dashboard.createStudent()">Add</button>
+                        </div>
+                        <div id="new-student-result" style="margin-bottom:15px; color: var(--primary); font-weight:bold;"></div>
+                        
+                        <hr style="border:0; border-top:1px solid #eee; margin:15px 0;">
+                        
+                        <p style="font-size:0.8rem; color:#666; margin-bottom:5px;">Bulk Upload (CSV):</p>
+                        <p style="font-size:0.75rem; color:#888; margin-bottom:5px;">List names in column A or separated by commas.</p>
+                        <input type="file" id="csv-upload" accept=".csv" style="font-size:0.8rem;">
+                        <button class="btn btn-secondary btn-sm" style="margin-top:5px; width:100%;" onclick="app.dashboard.handleCSVUpload()">Upload Class List</button>
                     </div>
                     <div class="card table-container">
                         <h3>Student List</h3>
@@ -202,19 +217,39 @@
                 </div>
             </div>
 
-            <!-- Tab 2: Assignments -->
+            <!-- Tab 2: Assignments (UPDATED) -->
             <div id="tab-assign" class="dashboard-tab hidden">
                 <div class="card">
-                    <h3>Assign Lesson to Class</h3>
-                    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px;">
-                        <select id="assign-subject" class="input" style="flex:1;" onchange="app.dashboard.loadAssignableGames()"><option value="math">Math</option><option value="science">Science</option></select>
-                        <select id="assign-game" class="input" style="flex:2;"><option value="">Select a Game...</option></select>
-                        <button class="btn btn-primary" onclick="app.dashboard.assignGameToClass()">Assign to All</button>
+                    <h3>Assign Lesson</h3>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:15px; margin-bottom:20px; background:#f8f9fa; padding:15px; border-radius:8px;">
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:bold;">1. Select Subject</label>
+                            <select id="assign-subject" class="input" style="margin-bottom:0;" onchange="app.dashboard.loadAssignableGames()"><option value="math">Math</option><option value="science">Science</option></select>
+                        </div>
+                        <div>
+                            <label style="font-size:0.8rem; font-weight:bold;">2. Select Game</label>
+                            <select id="assign-game" class="input" style="margin-bottom:0;"><option value="">Select a Game...</option></select>
+                        </div>
                     </div>
+
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <h4 style="margin:0;">3. Select Students</h4>
+                        <div>
+                            <button class="btn btn-outline btn-sm" onclick="app.dashboard.toggleSelectAll(true)">Select All</button>
+                            <button class="btn btn-outline btn-sm" onclick="app.dashboard.toggleSelectAll(false)">Deselect All</button>
+                        </div>
+                    </div>
+
+                    <div id="assign-student-list" style="max-height:300px; overflow-y:auto; border:1px solid #eee; border-radius:8px; margin-bottom:20px;">
+                        <!-- Checkboxes injected here -->
+                    </div>
+
+                    <button class="btn btn-primary" style="width:100%;" onclick="app.dashboard.assignGameToSelected()">Assign to Selected Students</button>
                 </div>
             </div>
 
-            <!-- Tab 3: Grades (UPDATED with Filters) -->
+            <!-- Tab 3: Grades -->
             <div id="tab-grades" class="dashboard-tab hidden">
                 <div class="card">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
@@ -222,7 +257,6 @@
                         <button class="btn btn-secondary btn-sm" onclick="app.dashboard.exportCSV()">Download CSV 📥</button>
                     </div>
 
-                    <!-- NEW: Filters for Gradebook -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 8px;">
                         <div>
                             <label style="font-size: 0.8rem; font-weight: bold; color: #666;">Filter by Grade</label>
@@ -243,7 +277,6 @@
                             <label style="font-size: 0.8rem; font-weight: bold; color: #666;">Filter by Game</label>
                             <select id="gb-filter-game" class="input" style="margin-bottom:0;" onchange="app.dashboard.renderGradebookTable()">
                                 <option value="">All Games</option>
-                                <!-- Populated dynamically -->
                             </select>
                         </div>
                     </div>
@@ -302,7 +335,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, deleteDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, deleteDoc, onSnapshot, arrayUnion, writeBatch } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
         // FIREBASE CONFIG
@@ -332,6 +365,21 @@
                 if(viewId === 'admin') { if(prompt("Enter Admin Password:") !== "1030") return alert("Access Denied"); }
                 document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
                 document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                
+                // --- FIX: AUTO LOAD DATA ON DASHBOARD ENTRY ---
+                if(viewId === 'dashboard') {
+                    // Automatically load the active tab's data
+                    const activeTab = document.querySelector('.tab-btn.active');
+                    if(activeTab) {
+                        if(activeTab.innerText.includes('Manage')) dashboard.loadStudents();
+                        else if(activeTab.innerText.includes('Assign')) dashboard.loadAssignableGames(); // and students
+                        else dashboard.loadGrades();
+                    } else {
+                        // Default to class tab if none active
+                        dashboard.switchTab('class'); 
+                    }
+                }
+                
                 updateHeader(); window.scrollTo(0,0);
             }
         };
@@ -351,7 +399,7 @@
                         state.userType = 'teacher'; 
                         state.currentUser = user; 
                         ui.showAdminEntry(user.email.toLowerCase() === ADMIN_EMAIL.toLowerCase()); 
-                        // DIRECT DASHBOARD REDIRECT FOR TEACHER
+                        // --- FIX: AUTO REDIRECT TO DASHBOARD ---
                         const currentView = document.querySelector('.view-section:not(.hidden)').id;
                         if(currentView === 'view-teacher-login' || currentView === 'view-landing') {
                              router.go('dashboard');
@@ -366,14 +414,100 @@
             }
         };
         const dashboard = {
-            switchTab: (tabName) => { document.querySelectorAll('.dashboard-tab').forEach(el => el.classList.add('hidden')); document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active')); document.getElementById(`tab-${tabName}`).classList.remove('hidden'); document.querySelector(`button[onclick="app.dashboard.switchTab('${tabName}')"]`).classList.add('active'); if(tabName === 'class') dashboard.loadStudents(); if(tabName === 'assign') dashboard.loadAssignableGames(); if(tabName === 'grades') dashboard.loadGrades(); },
-            createStudent: async () => { const name = document.getElementById('new-student-name').value.trim(); if(!name) return; const code = name.split(' ')[0].toLowerCase() + '-' + Math.floor(Math.random()*1000); await addDoc(collection(db, "students"), { name, loginCode: code, teacherId: state.currentUser.uid, scores: {}, assignments: [] }); document.getElementById('new-student-name').value = ''; document.getElementById('new-student-result').textContent = `Code: ${code}`; dashboard.loadStudents(); },
+            switchTab: (tabName) => { document.querySelectorAll('.dashboard-tab').forEach(el => el.classList.add('hidden')); document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active')); document.getElementById(`tab-${tabName}`).classList.remove('hidden'); document.querySelector(`button[onclick="app.dashboard.switchTab('${tabName}')"]`).classList.add('active'); if(tabName === 'class') dashboard.loadStudents(); if(tabName === 'assign') { dashboard.loadAssignableGames(); dashboard.loadStudentsForAssignment(); } if(tabName === 'grades') dashboard.loadGrades(); },
+            
+            // --- CSV UPLOAD FEATURE ---
+            handleCSVUpload: () => {
+                const fileInput = document.getElementById('csv-upload');
+                const file = fileInput.files[0];
+                if (!file) return alert("Please select a CSV file first.");
+
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    const text = e.target.result;
+                    // Split by new line, remove empty lines
+                    const names = text.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+                    
+                    if (names.length === 0) return alert("File is empty");
+                    if (names.length > 50) return alert("Limit 50 students per upload.");
+
+                    ui.spinner(true);
+                    const batch = writeBatch(db);
+                    let count = 0;
+
+                    for (const name of names) {
+                        // Skip header if present (heuristic: "Name" or "name")
+                        if(name.toLowerCase() === 'name') continue;
+
+                        const code = name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + Math.floor(Math.random()*1000);
+                        const ref = doc(collection(db, "students"));
+                        batch.set(ref, {
+                            name: name, 
+                            loginCode: code, 
+                            teacherId: state.currentUser.uid, 
+                            scores: {}, 
+                            assignments: []
+                        });
+                        count++;
+                    }
+
+                    try {
+                        await batch.commit();
+                        ui.toast(`Successfully created ${count} students!`);
+                        dashboard.loadStudents();
+                        fileInput.value = ''; // Reset
+                    } catch (err) {
+                        alert("Error uploading: " + err.message);
+                    }
+                    ui.spinner(false);
+                };
+                reader.readAsText(file);
+            },
+
+            createStudent: async () => { const name = document.getElementById('new-student-name').value.trim(); if(!name) return; const code = name.split(' ')[0].toLowerCase().replace(/[^a-z0-9]/g, '') + '-' + Math.floor(Math.random()*1000); await addDoc(collection(db, "students"), { name, loginCode: code, teacherId: state.currentUser.uid, scores: {}, assignments: [] }); document.getElementById('new-student-name').value = ''; document.getElementById('new-student-result').textContent = `Code: ${code}`; dashboard.loadStudents(); },
             loadStudents: async () => { const snap = await getDocs(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid))); state.students = snap.docs.map(d => ({id: d.id, ...d.data()})); document.getElementById('student-list-body').innerHTML = state.students.map(s => `<tr><td>${s.name}</td><td><code>${s.loginCode}</code></td><td><button class="btn btn-danger btn-sm" onclick="app.dashboard.deleteStudent('${s.id}')">Delete</button></td></tr>`).join(''); },
             deleteStudent: async (id) => { if(confirm("Delete student?")) { await deleteDoc(doc(db, "students", id)); dashboard.loadStudents(); } },
             loadAssignableGames: async () => { const subj = document.getElementById('assign-subject').value; const snap = await getDocs(query(collection(db, "games"), where("subject", "==", subj))); const select = document.getElementById('assign-game'); select.innerHTML = '<option value="">Select a Game...</option>'; snap.forEach(d => select.innerHTML += `<option value="${d.data().gameId}">${d.data().title}</option>`); },
-            assignGameToClass: async () => { const gameId = document.getElementById('assign-game').value; if(!gameId) return alert("Select a game"); ui.spinner(true); const snap = await getDocs(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid))); await Promise.all(snap.docs.map(d => updateDoc(doc(db, "students", d.id), { assignments: arrayUnion(gameId) }))); ui.spinner(false); ui.toast("Assigned!"); },
             
-            // --- UPDATED GRADEBOOK LOGIC ---
+            // --- ASSIGNMENT UPGRADES ---
+            loadStudentsForAssignment: async () => {
+                // Ensure students are loaded
+                if(state.students.length === 0) await dashboard.loadStudents();
+                const list = document.getElementById('assign-student-list');
+                list.innerHTML = state.students.map(s => `
+                    <div class="assignment-row">
+                        <input type="checkbox" class="checkbox-custom student-select-cb" value="${s.id}" checked>
+                        <span>${s.name}</span>
+                    </div>
+                `).join('');
+            },
+            toggleSelectAll: (select) => {
+                document.querySelectorAll('.student-select-cb').forEach(cb => cb.checked = select);
+            },
+            assignGameToSelected: async () => {
+                const gameId = document.getElementById('assign-game').value;
+                if(!gameId) return alert("Select a game");
+                
+                // Get selected IDs
+                const selectedIds = Array.from(document.querySelectorAll('.student-select-cb:checked')).map(cb => cb.value);
+                if(selectedIds.length === 0) return alert("Select at least one student");
+
+                ui.spinner(true);
+                const batch = writeBatch(db);
+                selectedIds.forEach(id => {
+                    const ref = doc(db, "students", id);
+                    // Firestore doesn't support arrayUnion in batch directly with helper, need specific update call syntax
+                    // But we can do Promise.all for updates since it's cleaner for arrayUnion
+                });
+
+                // Batch write doesn't support arrayUnion easily in modular SDK mixed with set, using Promise.all
+                const updates = selectedIds.map(id => updateDoc(doc(db, "students", id), { assignments: arrayUnion(gameId) }));
+                
+                await Promise.all(updates);
+                ui.spinner(false);
+                ui.toast(`Assigned to ${selectedIds.length} students!`);
+            },
+
             loadGrades: async () => {
                 await dashboard.loadStudents();
                 // Fetch ALL games to cache metadata for dropdowns
@@ -381,7 +515,6 @@
                 state.allGamesMap = {};
                 gameSnap.forEach(d => state.allGamesMap[d.data().gameId] = d.data());
                 
-                // Initial filter run (populates dropdowns with everything)
                 dashboard.filterGradebook();
             },
 
@@ -390,7 +523,6 @@
                 const subjectFilter = document.getElementById('gb-filter-subject').value;
                 const gameSelect = document.getElementById('gb-filter-game');
                 
-                // 1. Populate Game Dropdown based on Grade/Subject filters
                 let optionsHtml = '<option value="">All Games</option>';
                 Object.values(state.allGamesMap).forEach(g => {
                     const matchGrade = !gradeFilter || g.grade === gradeFilter;
@@ -399,21 +531,18 @@
                         optionsHtml += `<option value="${g.gameId}">${g.title}</option>`;
                     }
                 });
-                // Keep currently selected game if it still exists in filter, else reset
                 const currentVal = gameSelect.value;
                 gameSelect.innerHTML = optionsHtml;
                 if(currentVal && gameSelect.querySelector(`option[value="${currentVal}"]`)) {
                      gameSelect.value = currentVal;
                 }
-
-                // 2. Render Table
                 dashboard.renderGradebookTable();
             },
 
             renderGradebookTable: () => {
                 const gradeFilter = document.getElementById('gb-filter-grade').value;
                 const subjectFilter = document.getElementById('gb-filter-subject').value;
-                const gameFilter = document.getElementById('gb-filter-game').value; // Specific ID
+                const gameFilter = document.getElementById('gb-filter-game').value;
                 
                 const tbody = document.getElementById('gradebook-body');
                 tbody.innerHTML = '';
@@ -422,9 +551,8 @@
                     if(!s.scores) return;
                     Object.keys(s.scores).forEach(gameId => {
                         const gameMeta = state.allGamesMap[gameId];
-                        if(!gameMeta) return; // Skip deleted games
+                        if(!gameMeta) return;
 
-                        // Apply Filters
                         const matchGrade = !gradeFilter || gameMeta.grade === gradeFilter;
                         const matchSubject = !subjectFilter || gameMeta.subject === subjectFilter;
                         const matchGame = !gameFilter || gameId === gameFilter;
