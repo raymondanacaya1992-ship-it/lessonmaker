@@ -267,6 +267,7 @@
                 </div>
                 <textarea id="adm-html" class="input" style="height:250px; font-family:monospace;" placeholder="Paste HTML/CSS/JS here..."></textarea>
                 <button class="btn btn-primary" onclick="app.logic.publishGame()">Publish to Platform</button>
+                <button class="btn btn-outline" onclick="state.editingGameId = null; app.router.go('landing')">Cancel</button>
             </div>
         </div>
 
@@ -337,6 +338,7 @@
         const state = { 
             userType: null, currentUser: null, studentId: null, 
             selectedSubject: null, currentLibraryTab: 'quests',
+            editingGameId: null, // Track if we are editing an existing lesson
             games: [], students: [], currentGame: null, liveScore: 0, 
             allGamesMap: {}, lastSessionData: {total: 0, correct: 0}
         };
@@ -418,11 +420,17 @@
 
                     const canDelete = (state.userType === 'teacher' && (state.currentUser.uid === g.creatorId || state.currentUser.email === ADMIN_EMAIL));
 
-                    const card = document.createElement('div');
-                    card.className = 'card game-card';
-                    card.innerHTML = `${rib}<h3>${g.title}</h3><p style="font-size:0.75rem;">${g.topic} • Gr ${g.grade}</p><div style="margin-top:auto; text-align:right;">
-                        ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); app.logic.deleteGame('${g.docId}')">🗑️</button>` : ''}
-                        <button class="btn btn-primary btn-sm">Play</button></div>`;
+const card = document.createElement('div');
+card.className = 'card game-card';
+card.innerHTML = `
+    ${rib}
+    <h3>${g.title}</h3>
+    <p style="font-size:0.75rem;">${g.topic} • Gr ${g.grade}</p>
+    <div style="margin-top:auto; text-align:right; display:flex; gap:5px; justify-content:flex-end;">
+        ${canDelete ? `<button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); app.logic.prepareEdit('${g.gameId}')">✏️ Edit</button>` : ''}
+        ${canDelete ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); app.logic.deleteGame('${g.docId}')">🗑️</button>` : ''}
+        <button class="btn btn-primary btn-sm">Play</button>
+    </div>`;
                     card.onclick = () => logic.launchGame(g);
                     grid.appendChild(card);
                 });
@@ -441,6 +449,28 @@
                 document.getElementById('game-frame').srcdoc = `<script>window.INITIAL_SCORE = ${best};<\/script>` + g.htmlCode;
                 router.go('game');
             },
+            
+            prepareEdit: (gameId) => {
+    const game = state.games.find(g => g.gameId === gameId);
+    if (!game) return;
+
+    state.editingGameId = game.gameId; // Tell the app we are editing
+    
+    // Fill the editor boxes with the old data
+    document.getElementById('adm-title').value = game.title;
+    document.getElementById('adm-subj').value = game.subject;
+    document.getElementById('adm-grade').value = game.grade;
+    document.getElementById('adm-topic').value = game.topic;
+    document.getElementById('adm-html').value = game.htmlCode;
+
+    // Change the button text so you know it's an update
+    document.querySelector('#view-admin .btn-primary').textContent = "Update Lesson Content";
+    
+    // Go to the admin page
+    document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
+    document.getElementById('view-admin').classList.remove('hidden');
+},
+
             handleScoreUpdate: (data) => {
                 state.liveScore = Math.round(data.score);
                 state.lastSessionData = { total: data.total || 0, correct: data.correct || 0 };
@@ -484,13 +514,44 @@
             },
             exitGame: () => { if(state.userType === 'student') updateDoc(doc(db, "students", state.studentId), { status: "Idle", currentSessionScore: 0 }); router.go('library'); },
             publishGame: async () => {
-                const title = document.getElementById('adm-title').value;
-                const html = document.getElementById('adm-html').value;
-                if(!title || !html) return alert("Fill fields");
-                const id = 'g_' + Date.now();
-                await setDoc(doc(db, "games", id), { gameId: id, title, subject: document.getElementById('adm-subj').value, grade: document.getElementById('adm-grade').value, topic: document.getElementById('adm-topic').value, htmlCode: html, creatorId: state.currentUser.uid });
-                ui.toast("Published!"); router.go('landing');
-            },
+    const title = document.getElementById('adm-title').value;
+    const html = document.getElementById('adm-html').value;
+    const subj = document.getElementById('adm-subj').value;
+    const grade = document.getElementById('adm-grade').value;
+    const topic = document.getElementById('adm-topic').value;
+
+    if(!title || !html) return alert("Fill in the title and HTML code!");
+    
+    ui.spinner(true);
+    
+    // If editingGameId is empty, it makes a new ID. If full, it uses the old ID.
+    const id = state.editingGameId || 'g_' + Date.now();
+
+    try {
+        await setDoc(doc(db, "games", id), { 
+            gameId: id, 
+            title, 
+            subject: subj, 
+            grade, 
+            topic, 
+            htmlCode: html, 
+            creatorId: state.currentUser.uid 
+        });
+        
+        ui.toast(state.editingGameId ? "Lesson Updated!" : "Lesson Published!");
+        
+        // Reset the editor back to empty
+        state.editingGameId = null;
+        document.getElementById('adm-title').value = '';
+        document.getElementById('adm-html').value = '';
+        document.querySelector('#view-admin .btn-primary').textContent = "Publish to Platform";
+        
+        router.go('landing');
+    } catch (e) {
+        alert("Error saving: " + e.message);
+    }
+    ui.spinner(false);
+},
             deleteGame: async (docId) => { if(confirm("Permanently delete?")) { await deleteDoc(doc(db, "games", docId)); logic.refreshContent(); } },
             refreshContent: () => { logic.selectSubject(state.selectedSubject); },
             renderShop: async () => {
