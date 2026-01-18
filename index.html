@@ -196,9 +196,10 @@
                 <div style="display:flex; gap: 12px; align-items: center;">
                     <div style="background:#f1f5f9; padding:8px 15px; border-radius:10px; font-weight:800;">Score: <span id="game-current-score">0</span></div>
                     <button class="btn btn-primary" onclick="app.logic.manualSave()">💾 Save Progress</button>
+                    <button class="btn btn-outline" onclick="app.logic.toggleFullscreen()">📺 Full Screen</button>
                 </div>
             </div>
-            <iframe id="game-frame" sandbox="allow-scripts allow-modals allow-same-origin"></iframe>
+            <iframe id="game-frame" sandbox="allow-scripts allow-modals allow-same-origin allow-popups allow-forms" allowfullscreen></iframe>
         </div>
 
         <!-- VIEW: Teacher Dashboard -->
@@ -451,6 +452,10 @@
                     <select id="adm-grade" class="input"><option value="K">K</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select>
                     <input type="text" id="adm-topic" class="input" placeholder="Topic (e.g. Addition)">
                 </div>
+                <div style="margin-bottom:15px;">
+    <label style="font-size: 0.8rem; font-weight: 800; color: var(--primary);">External Game Link (e.g. Netlify/Itch.io):</label>
+    <input type="text" id="adm-url" class="input" placeholder="https://halogame2026.netlify.app/">
+</div>
                 <textarea id="adm-html" class="input" style="height:250px; font-family:monospace;" placeholder="Paste HTML/CSS/JS here..."></textarea>
                 <button class="btn btn-primary" onclick="app.logic.publishGame()">Publish to Platform</button>
                 <button class="btn btn-outline" onclick="state.editingGameId = null; app.router.go('landing')">Cancel</button>
@@ -569,12 +574,30 @@
         const logic = {
             selectSubject: async (subj) => {
                 if(!state.currentUser) return router.go('student-login');
-                if(state.userType === 'student' && SUBJECT_CONFIG[subj].lockable && state.currentUser.gamesLocked) return alert("Your access to Games is currently locked by the teacher.");
+                
+                // --- FAST PASS LOGIC FOR GAMES ---
+                if(subj === 'games') {
+                    // This tells the app to skip the list and open your Netlify site immediately
+                    const gamePortal = {
+                        title: "Game Arcade",
+                        externalUrl: "https://halogame2026.netlify.app/",
+                        topic: "Arcade"
+                    };
+                    app.logic.launchGame(gamePortal);
+                    return; // Stop here so it doesn't open the library
+                }
+
+                if(state.userType === 'student' && SUBJECT_CONFIG[subj].lockable && state.currentUser.gamesLocked) {
+                    return alert("Your access to Games is currently locked by the teacher.");
+                }
+
                 state.selectedSubject = subj;
                 document.getElementById('library-subject-title').textContent = SUBJECT_CONFIG[subj].label;
                 ui.spinner(true);
+                
                 const snap = await getDocs(query(collection(db, "games"), where("subject", "==", subj)));
                 state.games = snap.docs.map(d => ({ docId: d.id, ...d.data() }));
+                
                 if(state.userType === 'student') document.getElementById('filter-grade').value = state.currentUser.grade;
                 logic.switchLibraryTab('quests');
                 router.go('library');
@@ -622,18 +645,44 @@ card.innerHTML = `
                 });
             },
             launchGame: async (g) => {
-                state.currentGame = g; state.liveScore = 0; state.lastSessionData = {total: 0, correct: 0};
+                state.currentGame = g; 
+                state.liveScore = 0; 
+                state.lastSessionData = {total: 0, correct: 0};
+                
+                // Set the header title
                 document.getElementById('game-player-title').textContent = g.title;
+                
+                const frame = document.getElementById('game-frame');
+
+                // THE PROJECTOR LOGIC
+                if (g.externalUrl && g.externalUrl.trim() !== "") {
+                    // 1. If there's a link, we must CLEAR the srcdoc first
+                    frame.removeAttribute('srcdoc'); 
+                    // 2. Then set the src to the website URL
+                    frame.src = g.externalUrl; 
+                } else {
+                    // 1. If it's code, we CLEAR the src URL first
+                    frame.src = ""; 
+                    // 2. Then inject the HTML code
+                    const best = (state.currentUser?.scores?.[g.gameId]?.score) || 0;
+                    frame.srcdoc = `<script>window.INITIAL_SCORE = ${best};<\/script>` + (g.htmlCode || "");
+                }
+
                 if(state.userType === 'student') {
                     await updateDoc(doc(db, "students", state.studentId), { 
-                        status: `🕹️ Working on: ${g.topic} (${g.title})`, 
+                        status: `🕹️ In Arcade: ${g.title}`, 
                         currentSessionScore: 0, 
                         lastActive: serverTimestamp() 
                     });
                 }
-                const best = (state.currentUser?.scores?.[g.gameId]?.score) || 0;
-                document.getElementById('game-frame').srcdoc = `<script>window.INITIAL_SCORE = ${best};<\/script>` + g.htmlCode;
                 router.go('game');
+            },
+
+            toggleFullscreen: () => {
+                const elem = document.getElementById("game-frame");
+                if (elem.requestFullscreen) { elem.requestFullscreen(); }
+                else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); }
+                else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); }
             },
             
             prepareEdit: (gameId) => {
@@ -700,44 +749,42 @@ card.innerHTML = `
             },
             exitGame: () => { if(state.userType === 'student') updateDoc(doc(db, "students", state.studentId), { status: "Idle", currentSessionScore: 0 }); router.go('library'); },
             publishGame: async () => {
-    const title = document.getElementById('adm-title').value;
-    const html = document.getElementById('adm-html').value;
-    const subj = document.getElementById('adm-subj').value;
-    const grade = document.getElementById('adm-grade').value;
-    const topic = document.getElementById('adm-topic').value;
+                const title = document.getElementById('adm-title').value;
+                const html = document.getElementById('adm-html').value;
+                const subj = document.getElementById('adm-subj').value;
+                const grade = document.getElementById('adm-grade').value;
+                const topic = document.getElementById('adm-topic').value;
+                const externalUrl = document.getElementById('adm-url').value; // NEW
 
-    if(!title || !html) return alert("Fill in the title and HTML code!");
-    
-    ui.spinner(true);
-    
-    // If editingGameId is empty, it makes a new ID. If full, it uses the old ID.
-    const id = state.editingGameId || 'g_' + Date.now();
+                if(!title) return alert("Please enter a title!");
+                
+                ui.spinner(true);
+                const id = state.editingGameId || 'g_' + Date.now();
 
-    try {
-        await setDoc(doc(db, "games", id), { 
-            gameId: id, 
-            title, 
-            subject: subj, 
-            grade, 
-            topic, 
-            htmlCode: html, 
-            creatorId: state.currentUser.uid 
-        });
-        
-        ui.toast(state.editingGameId ? "Lesson Updated!" : "Lesson Published!");
-        
-        // Reset the editor back to empty
-        state.editingGameId = null;
-        document.getElementById('adm-title').value = '';
-        document.getElementById('adm-html').value = '';
-        document.querySelector('#view-admin .btn-primary').textContent = "Publish to Platform";
-        
-        router.go('landing');
-    } catch (e) {
-        alert("Error saving: " + e.message);
-    }
-    ui.spinner(false);
-},
+                try {
+                    await setDoc(doc(db, "games", id), { 
+                        gameId: id, 
+                        title, 
+                        subject: subj, 
+                        grade, 
+                        topic, 
+                        htmlCode: html,
+                        externalUrl: externalUrl, // SAVING THE LINK
+                        creatorId: state.currentUser.uid 
+                    });
+                    
+                    ui.toast(state.editingGameId ? "Lesson Updated!" : "Lesson Published!");
+                    state.editingGameId = null;
+                    // Clear fields
+                    document.getElementById('adm-title').value = '';
+                    document.getElementById('adm-html').value = '';
+                    document.getElementById('adm-url').value = ''; 
+                    router.go('landing');
+                } catch (e) {
+                    alert("Error saving: " + e.message);
+                }
+                ui.spinner(false);
+            },
             deleteGame: async (docId) => { if(confirm("Permanently delete?")) { await deleteDoc(doc(db, "games", docId)); logic.refreshContent(); } },
             refreshContent: () => { logic.selectSubject(state.selectedSubject); },
             renderShop: async () => {
