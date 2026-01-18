@@ -99,6 +99,35 @@
 }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Polish for Topic/Standard Labels */
+#forge-inputs-area label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--primary); /* Makes the field names stand out in blue */
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Ensure Topic/Standard inputs feel robust */
+#forge-inputs-area .input {
+    border: 2px solid #f1f5f9;
+    transition: 0.3s;
+}
+
+#forge-inputs-area .input:focus {
+    border-color: var(--primary);
+    background: #fff;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(0, 119, 204, 0.1);
+}
+
+/* Make the textarea for PDF/Standards a bit taller for long text */
+#forge-inputs-area textarea.input {
+    min-height: 100px;
+    line-height: 1.5;
+}
+
     </style>
 </head>
 <body>
@@ -1034,6 +1063,24 @@ card.innerHTML = `
         authService.check();
         window.app = { router, logic, auth: authService, dashboard };
         
+// --- THE GUIDING BLUEPRINT (Your Full Principles Text) ---
+const GUIDING_BLUEPRINT = `
+When creating each assessment item, you must adhere to the following three principles:
+1. STRUCTURE:
+   - Item Type: Ensure the item matches format (Multiple-Choice, EBSR, Multi-Select, etc.).
+   - Stimulus: All questions must be directly tied to the provided source text(s).
+   - Stem: Clear, direct, and grade-appropriate language.
+   - Options: Concise and parallel in structure.
+2. CONSTRUCTION:
+   - Clarity: Language must be precise and unambiguous.
+   - Alignment: Tightly align with ELA standards and assessment limits.
+   - Quality of Distractors: Incorrect options must be plausible, representing common misconceptions. Not obviously wrong or silly.
+   - Evidence-Based: All correct answers must be directly supported by evidence within the source text.
+3. RIGOR (COGNITIVE COMPLEXITY):
+   - DOK 1 (Identify/Recall): Recalling facts, definitions, or locating info stated in text.
+   - DOK 2 (Infer/Conclude): Applying skills, making inferences, or identifying cause-and-effect.
+   - DOK 3 (Analyze/Evaluate): Strategic thinking, analyzing complex themes, or justifying claims with evidence.`; 
+ 
         
         
         // --- PROMPT FORGE LOGIC ---
@@ -1043,11 +1090,11 @@ const FORGE_DATA = {
     builders: {
         ela_gen: { 
             name: "ELA General Tools Builder", 
-            fields: ["Grade", "Topic", "Theme", "Style", "Count"], 
+            fields: ["Grade", "Topic/Standards", "Theme", "Style", "Count"], 
             template: `Act as a Senior Educational Game Developer and ELA Specialist. I need a complete, interactive educational game in a single HTML file to embed in my EduQuest platform.
 Lesson Details:
 Grade Level: [[Grade]]
-Topic: [[Topic]]
+Topic/Standards: [[Topic/Standards]]
 Theme: [[Theme]]
 Interaction Style: [[Style]]
 Number of Questions: [[Count]]
@@ -1069,32 +1116,20 @@ Variables: Track currentScore (0-100), totalQuestions, and correctAnswers.
 Immediate Trigger: Every time the student answers a question, you must run this code:
 window.parent.postMessage({ type: 'TOOL_SCORE', score: Math.round((correctAnswers / totalQuestions) * 100), total: totalQuestions, correct: correctAnswers }, '*');
 
-`Guiding Blueprint for Item Creation:
-When creating each assessment item, you must adhere to the following three principles:
-Structure:
-Item Type: Ensure the item matches the requested format (e.g., Multiple-Choice, EBSR, Multi-Select, Constructed Response, Technology-Enhanced).
--Stimulus: All questions must be directly tied to the provided source text(s).
-Stem: The question stem must be clear, direct, and use grade-appropriate language.
-Options: Answer choices (for selected-response) must be concise and parallel in structure where possible.
-Construction:
--Clarity: The language used in the stem and options must be precise and unambiguous.
-Alignment: The item must tightly align with the selected ELA standard, its evidence statements, and its assessment limits.
-Quality of Distractors: For multiple-choice and multi-select items, all incorrect options (distractors) must be plausible. They should represent common misconceptions or errors in reasoning, forcing the student to truly comprehend the text rather than just match keywords. Distractors should not be obviously wrong or silly.
-Evidence-Based: All correct answers must be directly supported by evidence within the source text.
--Rigor (Cognitive Complexity):
-Adhere to the specified Depth of Knowledge (DOK) level for each question.
-DOK 1 (Identify/Recall): Questions that require recalling facts, definitions, or locating specific information directly stated in the text.
-DOK 2 (Infer/Conclude): Questions that require students to apply skills and concepts. This includes making inferences, comparing/contrasting, classifying information, or identifying cause-and-effect relationships that are not explicitly stated.
-DOK 3 (Analyze/Evaluate): Questions that require strategic thinking and reasoning. This includes analyzing complex themes, evaluating an author's argument, justifying a claim with a range of evidence, or synthesizing information across multiple parts of a text.
-` 
+${GUIDING_BLUEPRINT}
+
+Guiding Blueprint for Item Creation:
+- Structure: Stimulus tied to text, Clear stems, Parallel options.
+- Construction: Precise language, Alignment to standards, Quality distractors.
+- Rigor (DOK): DOK 1 (Recall), DOK 2 (Infer), DOK 3 (Analyze).` 
         },
         
         math_gen: { 
             name: "Mathematics General Tools Builder", 
-            fields: ["Grade", "Topic", "Theme", "Style", "Count"], 
+            fields: ["Grade", "Topic/Standards", "Theme", "Style", "Count"], 
             template: `Act as a Senior Educational Game Developer. I need a complete, interactive educational game in a single HTML file.
 Lesson Details:
-Grade Level: [[Grade]] | Topic: [[Topic]] | Theme: [[Theme]] | Interaction: [[Style]] | Questions: [[Count]]
+Grade Level: [[Grade]] | Topic/Standards: [[Topic/Standards]] | Theme: [[Theme]] | Interaction: [[Style]] | Questions: [[Count]]
 
 ### COMPUTATIONAL THINKING INTEGRATION (MANDATORY)
 Select primary CT skill (Decomposition, Pattern Recognition, Abstraction, or Algorithmic Thinking).
@@ -1107,29 +1142,12 @@ Technical Requirements:
 - Handshake: Every time a student answers (even if wrong), run:
 window.parent.postMessage({ type: 'TOOL_SCORE', score: Math.round((correctAnswers / totalQuestions) * 100), total: totalQuestions, correct: correctAnswers }, '*');
 
+${GUIDING_BLUEPRINT}
+
 Visual Style: "EdTech" design: Large buttons, Nunito/Arial, Blue (#0077cc), Green (#28a745).
 Rigor: Item Type adherence, Stimulus alignment, DOK 1-3 progression.`
-
-`Guiding Blueprint for Item Creation:
-When creating each assessment item, you must adhere to the following three principles:
-Structure:
-Item Type: Ensure the item matches the requested format (e.g., Multiple-Choice, EBSR, Multi-Select, Constructed Response, Technology-Enhanced).
--Stimulus: All questions must be directly tied to the provided source text(s).
-Stem: The question stem must be clear, direct, and use grade-appropriate language.
-Options: Answer choices (for selected-response) must be concise and parallel in structure where possible.
-Construction:
--Clarity: The language used in the stem and options must be precise and unambiguous.
-Alignment: The item must tightly align with the selected ELA standard, its evidence statements, and its assessment limits.
-Quality of Distractors: For multiple-choice and multi-select items, all incorrect options (distractors) must be plausible. They should represent common misconceptions or errors in reasoning, forcing the student to truly comprehend the text rather than just match keywords. Distractors should not be obviously wrong or silly.
-Evidence-Based: All correct answers must be directly supported by evidence within the source text.
--Rigor (Cognitive Complexity):
-Adhere to the specified Depth of Knowledge (DOK) level for each question.
-DOK 1 (Identify/Recall): Questions that require recalling facts, definitions, or locating specific information directly stated in the text.
-DOK 2 (Infer/Conclude): Questions that require students to apply skills and concepts. This includes making inferences, comparing/contrasting, classifying information, or identifying cause-and-effect relationships that are not explicitly stated.
-DOK 3 (Analyze/Evaluate): Questions that require strategic thinking and reasoning. This includes analyzing complex themes, evaluating an author's argument, justifying a claim with a range of evidence, or synthesizing information across multiple parts of a text.
-` 
         },
-        
+
         ela_pdf: { 
             name: "ELA Tools from PDF", 
             fields: ["Grade", "Theme", "PDF_Content"], 
@@ -1169,10 +1187,10 @@ STEP 3: TECHNICAL
 
         all_subjects: {
             name: "All Subjects Tool Builder",
-            fields: ["Grade", "Topic", "Count"],
+            fields: ["Grade", "Topic/Standards", "Count"],
             template: `Act as a Senior Learning Experience (LX) Designer and Full-Stack Developer.
 Build a complete interactive game.
-Grade Level: [[Grade]] | Topic: [[Topic]] | Count: [[Count]]
+Grade Level: [[Grade]] | Topic/Standards: [[Topic/Standards]] | Count: [[Count]]
 
 STEP 1: CONTENT SOURCE AUDIT
 - Case A: Use provided resource. Case B: Generate 5 original STEM-themed short stories.
@@ -1183,34 +1201,28 @@ STEP 3: TECHNICAL
 - Persistence: Check window.INITIAL_SCORE.
 - Handshake: window.parent.postMessage({ type: 'TOOL_SCORE', score: Math.round((correctAnswers / totalQuestions) * 100), total: totalQuestions, correct: correctAnswers }, '*');`
 
-`Guiding Blueprint for Item Creation:
-When creating each assessment item, you must adhere to the following three principles:
-Structure:
-Item Type: Ensure the item matches the requested format (e.g., Multiple-Choice, EBSR, Multi-Select, Constructed Response, Technology-Enhanced).
--Stimulus: All questions must be directly tied to the provided source text(s).
-Stem: The question stem must be clear, direct, and use grade-appropriate language.
-Options: Answer choices (for selected-response) must be concise and parallel in structure where possible.
-Construction:
--Clarity: The language used in the stem and options must be precise and unambiguous.
-Alignment: The item must tightly align with the selected ELA standard, its evidence statements, and its assessment limits.
-Quality of Distractors: For multiple-choice and multi-select items, all incorrect options (distractors) must be plausible. They should represent common misconceptions or errors in reasoning, forcing the student to truly comprehend the text rather than just match keywords. Distractors should not be obviously wrong or silly.
-Evidence-Based: All correct answers must be directly supported by evidence within the source text.
--Rigor (Cognitive Complexity):
-Adhere to the specified Depth of Knowledge (DOK) level for each question.
-DOK 1 (Identify/Recall): Questions that require recalling facts, definitions, or locating specific information directly stated in the text.
-DOK 2 (Infer/Conclude): Questions that require students to apply skills and concepts. This includes making inferences, comparing/contrasting, classifying information, or identifying cause-and-effect relationships that are not explicitly stated.
-DOK 3 (Analyze/Evaluate): Questions that require strategic thinking and reasoning. This includes analyzing complex themes, evaluating an author's argument, justifying a claim with a range of evidence, or synthesizing information across multiple parts of a text.
-` 
         },
 
         assessment: { 
             name: "Assessment Builder", 
             fields: ["Grade", "Topic", "Count", "Source_Text"], 
-            template: `### ROLE: Senior Developer and SC ELA Curriculum Expert.
-Input: Grade [[Grade]], Topic [[Topic]], Count [[Count]]. Stimulus: [[Source_Text]].
+            template: `### Act as a Senior Full-Stack Developer and SC ELA Curriculum Expert. Your goal is to generate a single-file, fully functional HTML/CSS/JS website that acts as a standalone assessment for students.
+Input: Grade [[Grade]], Topic/Standards [[Topic/Standards]], Count [[Count]]. Stimulus: [[Source_Text]].
+
+${GUIDING_BLUEPRINT}
 
 PHASE 1: CONTENT GENERATION
-- Align to SC ELA Standard codes. Create stimulus if missing.
+- Align to Standard/Topic. 
+- If a {{SourceDocument}} is provided, use it as the primary stimulus.
+If not, generate a high-quality, grade-appropriate stimulus aligned to Grade {{GradeLevel}} and {{Topic/Standards}}.
+The stimulus should be appropriate to the subject area and may include one or more of the following as relevant:
+Narrative or informational text
+Data tables, graphs, charts, or diagrams
+Real-world scenarios or problem contexts
+Historical sources or scientific descriptions
+Ensure the stimulus supports assessment of key skills and standards for the subject.
+-Create stimulus if missing.
+-ITEMS: Create {{Count}} multiple-choice questions with 4 options each. Include an "Evidence-Based" rationale for the correct answer.
 PHASE 2: UI/UX ARCHITECTURE
 - Split-Pane layout (Stimulus left, Items right). Montserrat/Open Sans fonts.
 PHASE 3: TECHNICAL
@@ -1222,32 +1234,14 @@ PHASE 3: TECHNICAL
 ### 1.2 Define Skill-Mastery Practice Center
 - Content: At least 20 distinct activities.
 - Interaction: "Check Answer" button logic (Lock answer if correct, show "Try Again" if incorrect).
-- Victory Delay: 3-second delay on final submission.`
-
-`Guiding Blueprint for Item Creation:
-When creating each assessment item, you must adhere to the following three principles:
-Structure:
-Item Type: Ensure the item matches the requested format (e.g., Multiple-Choice, EBSR, Multi-Select, Constructed Response, Technology-Enhanced).
--Stimulus: All questions must be directly tied to the provided source text(s).
-Stem: The question stem must be clear, direct, and use grade-appropriate language.
-Options: Answer choices (for selected-response) must be concise and parallel in structure where possible.
-Construction:
--Clarity: The language used in the stem and options must be precise and unambiguous.
-Alignment: The item must tightly align with the selected ELA standard, its evidence statements, and its assessment limits.
-Quality of Distractors: For multiple-choice and multi-select items, all incorrect options (distractors) must be plausible. They should represent common misconceptions or errors in reasoning, forcing the student to truly comprehend the text rather than just match keywords. Distractors should not be obviously wrong or silly.
-Evidence-Based: All correct answers must be directly supported by evidence within the source text.
--Rigor (Cognitive Complexity):
-Adhere to the specified Depth of Knowledge (DOK) level for each question.
-DOK 1 (Identify/Recall): Questions that require recalling facts, definitions, or locating specific information directly stated in the text.
-DOK 2 (Infer/Conclude): Questions that require students to apply skills and concepts. This includes making inferences, comparing/contrasting, classifying information, or identifying cause-and-effect relationships that are not explicitly stated.
-DOK 3 (Analyze/Evaluate): Questions that require strategic thinking and reasoning. This includes analyzing complex themes, evaluating an author's argument, justifying a claim with a range of evidence, or synthesizing information across multiple parts of a text.
+- Victory Delay: 3-second delay on final submission.` 
         },
 
         game_builder: { 
             name: "Game Tools Builder", 
-            fields: ["Grade", "Topic", "Theme", "Loop"], 
+            fields: ["Grade", "Topic/Standards", "Theme", "Loop"], 
             template: `ROLE: Master Educator, AAA Narrative Designer, Senior Developer.
-Grade: [[Grade]], Topic: [[Topic]], Theme: [[Theme]], Loop: [[Loop]]
+Grade: [[Grade]], Topic/Standards: [[Topic/Standards]], Theme: [[Theme]], Loop: [[Loop]]
 
 Phase 1: Game Design Document (The Creative Blueprint)
 - Game Title, The Legend (Narrative), The Quest (Goal), Mechanics.
@@ -1267,11 +1261,52 @@ STOP after Phase 1 and wait for confirmation.`
             template: `Build a Multi-Activity tool for [[Topic]], Grade [[Grade]].
 Activity Count: [[Activity_Count]]
 
+Act as a Senior Curriculum Expert, Learning Experience (LX) Designer, and Full-Stack Developer. Your goal is to design and build a complete, standards-aligned ELA interactive learning experience in a single self-contained HTML file. You are responsible for determining the optimal number, sequence, and type of activities needed to move learners from initial exposure to mastery of the provided {{Topic}} or {{Standards}}.
+
+Instructional Design Expectations
+Design a multi-activity learning sequence that is:
+Intentionally scaffolded
+Developmentally appropriate for Grade {{GradeLevel}}
+Aligned to the cognitive demands of the standards
+Determine the most effective progression of activities, which may include:
+Modeling or guided exploration
+Supported practice
+Application in new contexts
+Independent or transfer tasks
+Scaffolding should be evident through:
+Gradual release of responsibility
+Increasing complexity and rigor
+Reduction of hints and supports over time
+Mastery-Based Learning
+Define clear mastery criteria for each activity
+Require learners to demonstrate mastery before advancing
+Provide immediate, actionable feedback
+Allow retries, adaptive hints, or alternate pathways when mastery is not met
+
+Activity Design
+Use a variety of interaction types appropriate to ELA (e.g., text analysis, evidence selection, sequencing, short responses, game mechanics)
+Ensure each activity targets a specific skill or sub-skill that contributes to overall mastery
+Standards & Transparency
+
+Explicitly align each activity to:
+One or more of the provided {{Standards}}
+A clearly stated learning objective
+Embed teacher-facing metadata as comments in the HTML explaining:
+Instructional purpose of each activity
+
+How scaffolding is applied
+Mastery criteria
+Technical Requirements
+Output a single HTML file with embedded CSS and JavaScript
+No external libraries or dependencies
+
+Include clear learner instructions, progress indicators, and feedback mechanisms
+
 1. MULTI-ACTIVITY RESUME HANDSHAKE:
 - Define daySmartScores = [0,0,0,0,0].
 - Logic to distribute window.INITIAL_SCORE so student starts on the correct day.
 2. ADAPTIVE SMART SCORE: 
-- Correct: <70 +10, <90 +5, else +2. Incorrect: -5.
+- Correct: <70 +5, <90 +5, else +2. Incorrect: -5.
 3. COMPOSITE BROADCAST: 
 - Average all activity scores into one master score (0-100).
 - window.parent.postMessage({ type: 'TOOL_SCORE', score: Number(masterScore), total: 100, correct: masterScore }, '*');
