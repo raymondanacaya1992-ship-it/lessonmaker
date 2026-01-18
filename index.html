@@ -218,31 +218,40 @@
             </div>
 
             <!-- DASH: MONITOR -->
-            <div id="dash-monitor" class="dashboard-section">
-                <div class="card">
-                    <h3>Student Live Pulse</h3>
-                    <div style="margin: 10px 0; display: flex; gap: 10px; align-items: center; background: #f0fdf4; padding: 10px; border-radius: 8px; border: 1px solid #dcfce7;">
-    <label style="font-size: 0.8rem; font-weight: 800; color: #166534;">Monitor Grade:</label>
-    <select id="monitor-filter-grade" class="input" style="width: auto; margin: 0; padding: 5px 10px;" onchange="app.dashboard.loadMonitor()">
-        <option value="">All Grades</option>
-        <option value="K">Grade K</option>
-        <option value="1">Grade 1</option>
-        <option value="2">Grade 2</option>
-        <option value="3">Grade 3</option>
-        <option value="4">Grade 4</option>
-        <option value="5">Grade 5</option>
-        <option value="6">Grade 6</option>
-    </select>
-    <span style="font-size: 0.7rem; color: #166534; font-style: italic;">(Filters the live view below)</span>
+            <!-- DASH: MONITOR -->
+<div id="dash-monitor" class="dashboard-section">
+    <div style="margin-bottom: 20px;">
+        <h3>Live Classroom Pulse</h3>
+        <div style="margin: 10px 0; display: flex; gap: 10px; align-items: center; background: #f8fafc; padding: 10px; border-radius: 8px;">
+            <label style="font-size: 0.8rem; font-weight: 800;">Filter Grade:</label>
+            <select id="monitor-filter-grade" class="input" style="width: auto; margin: 0;" onchange="app.dashboard.loadMonitor()">
+                <option value="">All Grades</option>
+                <option value="K">K</option><option value="1">1</option><option value="2">2</option>
+                <option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option>
+            </select>
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        <!-- STUCK / HELP NEEDED -->
+        <div class="card" style="border-top: 5px solid var(--danger);">
+            <h4 style="color: var(--danger);">⚠️ Help Needed (Struggling)</h4>
+            <table style="font-size: 0.85rem;">
+                <thead><tr><th>Student</th><th>Topic</th><th>Score</th></tr></thead>
+                <tbody id="monitor-stuck-body"></tbody>
+            </table>
+        </div>
+
+        <!-- WORKING GREAT / ON TRACK -->
+        <div class="card" style="border-top: 5px solid var(--secondary);">
+            <h4 style="color: var(--secondary);">🌟 On Track & High Achievers</h4>
+            <table style="font-size: 0.85rem;">
+                <thead><tr><th>Student</th><th>Topic</th><th>Score</th></tr></thead>
+                <tbody id="monitor-track-body"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
-                    <div style="overflow-x:auto;">
-                        <table style="width:100%;">
-                            <thead><tr><th>Student</th><th>Current Lesson/Topic</th><th>Recent Score</th><th>Rewards/Behavior</th></tr></thead>
-                            <tbody id="monitor-body"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
 
             <!-- DASH: ROSTER -->
             <div id="dash-class" class="dashboard-section hidden">
@@ -770,33 +779,50 @@ card.innerHTML = `
                 if(t === 'shop') dashboard.loadShopManager();
             },
             loadMonitor: () => {
-    // 1. Get the filter value
     const filterGrade = document.getElementById('monitor-filter-grade').value;
 
     onSnapshot(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid)), (snap) => {
-        const body = document.getElementById('monitor-body'); 
-        body.innerHTML = '';
+        const stuckBody = document.getElementById('monitor-stuck-body'); 
+        const trackBody = document.getElementById('monitor-track-body');
+        
+        // Clear both tables
+        stuckBody.innerHTML = '';
+        trackBody.innerHTML = '';
         
         snap.forEach(d => {
             const s = d.data();
-            
-            // --- THE FILTER LOGIC ---
-            // If the teacher selected a grade, skip students who aren't in that grade
-            if (filterGrade !== "" && s.grade !== filterGrade) {
-                return; 
-            }
+            if (filterGrade !== "" && s.grade !== filterGrade) return; 
 
-            const struggle = s.currentSessionScore > 0 && s.currentSessionScore < 50;
-            body.innerHTML += `<tr>
-                <td class="${struggle ? 'struggle-alert' : ''}">${s.name} ${struggle ? '⚠️' : ''}</td>
-                <td>${s.status || 'Idle'}</td>
-                <td>${s.currentSessionScore || 0}%</td>
+            // Logic: Is the student struggling? (Score between 1 and 49)
+            const isStruggling = s.currentSessionScore > 0 && s.currentSessionScore < 50;
+            const isIdle = s.status === "Idle" || !s.status;
+
+            // Create the row HTML
+            const rowHTML = `<tr>
+                <td style="font-weight:bold;">${s.name}</td>
+                <td style="font-size:0.75rem;">${s.status || 'Idle'}</td>
                 <td>
-                    <button class="btn btn-outline btn-sm" onclick="app.dashboard.adjustPoints('${d.id}', 10)">+10 Pts</button> 
-                    <button class="btn btn-danger btn-sm" onclick="app.dashboard.adjustPoints('${d.id}', -10)">-10 Pts</button>
+                    <span style="color: ${isStruggling ? 'var(--danger)' : 'var(--secondary)'}; font-weight:800;">
+                        ${s.currentSessionScore || 0}%
+                    </span>
+                    <div style="margin-top:5px;">
+                        <button class="btn btn-outline btn-sm" style="padding:2px 5px; font-size:0.6rem;" onclick="app.dashboard.adjustPoints('${d.id}', 10)">+10</button>
+                    </div>
                 </td>
             </tr>`;
+
+            // Sort into the correct table
+            if (isStruggling) {
+                stuckBody.innerHTML += rowHTML;
+            } else if (!isIdle) {
+                // Only show active students in the "On Track" table
+                trackBody.innerHTML += rowHTML;
+            }
         });
+
+        // If a table is empty, show a little message
+        if (stuckBody.innerHTML === '') stuckBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No students struggling. Good job!</td></tr>';
+        if (trackBody.innerHTML === '') trackBody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#94a3b8; padding:20px;">No active students currently.</td></tr>';
     });
 },
             adjustPoints: async (id, amt) => {
@@ -1188,16 +1214,52 @@ STEP 3: TECHNICAL
         all_subjects: {
             name: "All Subjects Tool Builder",
             fields: ["Grade", "Topic/Standards", "Count"],
-            template: `Act as a Senior Learning Experience (LX) Designer and Full-Stack Developer.
-Build a complete interactive game.
+            template: `Act as a Senior Learning Experience (LX) Designer, Curriculum Specialist, and Full-Stack Developer.
+Design and build a complete, student-ready interactive learning game aligned to academic standards.
 Grade Level: [[Grade]] | Topic/Standards: [[Topic/Standards]] | Count: [[Count]]
 
-STEP 1: CONTENT SOURCE AUDIT
-- Case A: Use provided resource. Case B: Generate 5 original STEM-themed short stories.
-STEP 2: CT INTEGRATION (MANDATORY)
-- Select and anchor to one: Decomposition, Pattern, Abstraction, or Algorithm.
-- UI Definition: "Student-friendly explanation" required.
-STEP 3: TECHNICAL
+STEP 1: CONTENT SOURCE AUDIT (MANDATORY)
+Determine the instructional source of truth before designing interactions.
+Case A – Provided Resource:
+Analyze the supplied text/media/data. Extract:
+Core concepts
+Academic vocabulary
+Skill demands (e.g., analyze, compute, interpret, argue)
+Common misconceptions
+
+Case B – Generated Content:
+Generate original, subject-appropriate content aligned to the grade level and standards.
+Content type adapts to subject:
+ELA: short texts, excerpts, narrative scenarios
+Math: problems, models, real-world contexts
+Science: phenomena, investigations, data sets
+Social Studies: sources, timelines, decision scenarios
+Arts / Other: critique tasks, creation challenges
+
+Generate [Count] distinct items with increasing cognitive demand.
+
+Content must be instructionally authentic, culturally neutral, and free of filler or trivia.
+
+STEP 2: THINKING SKILL INTEGRATION (REQUIRED)
+Select one cognitive anchor and design all gameplay around it.
+Cognitive Anchor (choose one):
+Decomposition, Pattern Recognition, Abstractionc, Algorithmic Thinking
+
+Implementation Rules:
+Explicitly map the anchor to the subject skill (e.g., abstraction → modeling, theme, synthesis).
+Embed the thinking skill into player actions, not just instructions.
+Include a student-friendly explanation that:
+Uses age-appropriate language
+Explains how the skill helps learning in this subject
+Appears in the UI (intro, help modal, or tooltip)
+
+STEP 3: GAME DESIGN REQUIREMENTS
+Interaction must be active (decision-making, manipulation, creation, or testing).
+Use progressive difficulty or adaptive feedback.
+Provide immediate, meaningful feedback for correct and incorrect responses.
+Avoid multiple-choice-only designs unless pedagogically justified.
+End with a clear “learning achieved” state.
+STEP 4: TECHNICAL
 - Persistence: Check window.INITIAL_SCORE.
 - Handshake: window.parent.postMessage({ type: 'TOOL_SCORE', score: Math.round((correctAnswers / totalQuestions) * 100), total: totalQuestions, correct: correctAnswers }, '*');`
 
@@ -1251,8 +1313,7 @@ Phase 2: Game Specification File (The Technical Blueprint)
 Phase 3: Build Interactive Game
 - Vanilla JS/HTML5/CSS3. Inline SVG.
 - Logic driven by parsing Phase 2 JSON.
-- Handshake: TOOL_SCORE postMessage on every answer.
-STOP after Phase 1 and wait for confirmation.` 
+- Handshake: TOOL_SCORE postMessage on every answer.` 
         },
 
         multi_activity: { 
