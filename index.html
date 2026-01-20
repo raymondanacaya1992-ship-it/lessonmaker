@@ -215,6 +215,7 @@
                 <div class="v-tab" id="d-tab-assign" onclick="app.dashboard.switchTab('assign')">Assignments</div>
                 <div class="v-tab" id="d-tab-shop" onclick="app.dashboard.switchTab('shop')">Shop Manager</div>
                 <div class="v-tab" id="d-tab-grades" onclick="app.dashboard.switchTab('grades')">Gradebook</div>
+                <div class="v-tab" id="d-tab-groups" onclick="app.dashboard.switchTab('groups')">Groups 👥</div>
                 <div class="v-tab" id="d-tab-forge" onclick="app.dashboard.switchTab('forge')">Prompt Forge 🛠️</div>
             </div>
 
@@ -315,6 +316,13 @@
                         <h4>Target Students</h4>
                         <div><button class="btn btn-outline btn-sm" onclick="app.dashboard.toggleCheckboxes(true)">Check All</button><button class="btn btn-outline btn-sm" onclick="app.dashboard.toggleCheckboxes(false)">Uncheck All</button></div>
                     </div>
+                    <div style="background: #f0f9ff; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #bae6fd;">
+    <label style="font-weight:800; font-size:0.8rem;">🚀 Fast Push to Group:</label>
+    <div style="display:flex; gap:10px; margin-top:5px;">
+        <select id="assign-group-select" class="input" style="margin:0;"><option value="">Loading Groups...</option></select>
+        <button class="btn btn-primary" onclick="app.dashboard.assignToGroup()">Push to Group</button>
+    </div>
+</div>
                     <div id="assign-student-list" style="max-height:250px; overflow-y:auto; border:1px solid #eee; border-radius:12px; padding:15px; margin-bottom:20px;"></div>
                     <button class="btn btn-primary" style="width:100%;" onclick="app.dashboard.assignToSelected()">Push Assignment to Students</button>
                 </div>
@@ -354,6 +362,24 @@
                 </div>
             </div>
         </div>
+        
+        <!-- DASH: GROUPS -->
+<div id="dash-groups" class="dashboard-section hidden">
+    <div style="display:grid; grid-template-columns: 1fr 2fr; gap:25px;">
+        <div class="card">
+            <h3>Create New Group</h3>
+            <input type="text" id="new-group-name" class="input" placeholder="e.g., Reading Group A">
+            <button class="btn btn-primary" style="width:100%;" onclick="app.dashboard.createGroup()">Create Group</button>
+            <hr style="margin:20px 0; opacity:0.1;">
+            <h4>Add Student to Group</h4>
+            <select id="group-select-list" class="input"><option value="">Select Group...</option></select>
+            <select id="student-select-list" class="input"><option value="">Select Student...</option></select>
+            <button class="btn btn-outline btn-sm" style="width:100%;" onclick="app.dashboard.addStudentToGroup()">Assign to Group</button>
+        </div>
+        <div id="group-display-area" style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;"></div>
+    </div>
+</div>
+        
         
         <!-- DASH: PROMPT FORGE WIZARD -->
 <div id="dash-forge" class="dashboard-section hidden">
@@ -495,7 +521,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, deleteDoc, onSnapshot, arrayUnion, writeBatch, serverTimestamp, increment, deleteField } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, query, where, doc, updateDoc, setDoc, deleteDoc, onSnapshot, arrayUnion, arrayRemove, writeBatch, serverTimestamp, increment, deleteField } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
         import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
         // CONFIG & CONSTANTS
@@ -819,6 +845,9 @@ card.innerHTML = `
                 if(page) page.classList.remove('hidden');
                 const btn = document.getElementById(`d-tab-${t}`);
                 if(btn) btn.classList.add('active');
+                
+                 if(t === 'groups') app.dashboard.loadGroups();
+                if(t === 'assign') app.dashboard.loadGroups(); // Refresh groups for the assign tab too
                 if(t === 'monitor') dashboard.loadMonitor();
                 if(t === 'class') dashboard.loadRoster();
                 if(t === 'assign') { dashboard.loadAssignableGames(); dashboard.loadStudentsForAssignment(); }
@@ -1086,7 +1115,76 @@ card.innerHTML = `
                 const code = name.split(' ')[0].toLowerCase() + '-' + Math.floor(100+Math.random()*899);
                 await addDoc(collection(db, "students"), { name, grade, loginCode: code, teacherId: state.currentUser.uid, pointsBalance: 0, totalPointsEverEarned: 0, scores: {}, assignments: [], gamesLocked: false, status: "Idle" });
                 dashboard.loadRoster(); document.getElementById('new-student-name').value = '';
+            },
+            createGroup: async () => {
+                const name = document.getElementById('new-group-name').value;
+                if(!name) return;
+                await addDoc(collection(db, "groups"), { name, teacherId: state.currentUser.uid, studentIds: [] });
+                document.getElementById('new-group-name').value = '';
+                app.dashboard.loadGroups();
+                ui.toast("Group Created!");
+            },
+
+            loadGroups: async () => {
+                const gSnap = await getDocs(query(collection(db, "groups"), where("teacherId", "==", state.currentUser.uid)));
+                const sSnap = await getDocs(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid)));
+                const gSelect = document.getElementById('group-select-list');
+                const gAssignSelect = document.getElementById('assign-group-select');
+                const sSelect = document.getElementById('student-select-list');
+                const display = document.getElementById('group-display-area');
+
+                const groupOptions = gSnap.docs.map(d => `<option value="${d.id}">${d.data().name}</option>`).join('');
+                if(gSelect) gSelect.innerHTML = '<option value="">Select Group...</option>' + groupOptions;
+                if(gAssignSelect) gAssignSelect.innerHTML = '<option value="">Choose Group...</option>' + groupOptions;
+                if(sSelect) sSelect.innerHTML = sSnap.docs.map(d => `<option value="${d.id}">${d.data().name}</option>`).join('');
+
+                if(display) {
+                    display.innerHTML = '';
+                    gSnap.forEach(gDoc => {
+                        const g = gDoc.data();
+                        const members = sSnap.docs.filter(s => g.studentIds.includes(s.id));
+                        display.innerHTML += `
+                            <div class="card" style="margin:0; border-left: 4px solid var(--primary);">
+                                <div style="display:flex; justify-content:space-between;"><strong>${g.name}</strong><button class="btn btn-danger btn-sm" style="padding:2px 5px;" onclick="app.dashboard.deleteGroup('${gDoc.id}')">🗑️</button></div>
+                                <div style="font-size:0.8rem; margin-top:10px; color:var(--text-light);">${members.map(m => `<div>• ${m.data().name} <span style="float:right; cursor:pointer;" onclick="app.dashboard.removeFromGroup('${gDoc.id}', '${m.id}')">✕</span></div>`).join('') || 'No students'}</div>
+                            </div>`;
+                    });
+                }
+            },
+
+            addStudentToGroup: async () => {
+                const gid = document.getElementById('group-select-list').value;
+                const sid = document.getElementById('student-select-list').value;
+                if(!gid || !sid) return;
+                await updateDoc(doc(db, "groups", gid), { studentIds: arrayUnion(sid) });
+                app.dashboard.loadGroups();
+                ui.toast("Added!");
+            },
+
+            removeFromGroup: async (gid, sid) => {
+                await updateDoc(doc(db, "groups", gid), { studentIds: arrayRemove(sid) });
+                app.dashboard.loadGroups();
+            },
+
+            deleteGroup: async (id) => {
+                if(confirm("Delete group?")) { await deleteDoc(doc(db, "groups", id)); app.dashboard.loadGroups(); }
+            },
+
+            assignToGroup: async () => {
+                const gId = document.getElementById('assign-group-select').value;
+                const lessonId = document.getElementById('assign-game').value;
+                if(!gId || !lessonId) return alert("Select group and lesson!");
+                ui.spinner(true);
+                const gDocRef = doc(db, "groups", gId);
+                const gSnap = await getDocs(query(collection(db, "groups"), where("__name__", "==", gId)));
+                const studentIds = gSnap.docs[0].data().studentIds;
+                const batch = writeBatch(db);
+                studentIds.forEach(sid => { batch.update(doc(db, "students", sid), { assignments: arrayUnion(lessonId) }); });
+                await batch.commit();
+                ui.spinner(false);
+                ui.toast("Group assignment complete!");
             }
+            
         };
 
         const authService = {
