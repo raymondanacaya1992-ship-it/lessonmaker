@@ -372,9 +372,18 @@
             <button class="btn btn-primary" style="width:100%;" onclick="app.dashboard.createGroup()">Create Group</button>
             <hr style="margin:20px 0; opacity:0.1;">
             <h4>Add Student to Group</h4>
-            <select id="group-select-list" class="input"><option value="">Select Group...</option></select>
-            <select id="student-select-list" class="input"><option value="">Select Student...</option></select>
-            <button class="btn btn-outline btn-sm" style="width:100%;" onclick="app.dashboard.addStudentToGroup()">Assign to Group</button>
+            <h4>Manage Group Members</h4>
+<!-- 1. Select the group you want to edit -->
+<select id="group-select-list" class="input" onchange="app.dashboard.loadGroups()">
+    <option value="">Choose a Group...</option>
+</select>
+
+<!-- 2. The Checkbox List (Scrollable) -->
+<div id="group-checkbox-container" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fff; margin-bottom: 10px;">
+    <p style="font-size: 0.75rem; color: #666;">Select a group above to see students...</p>
+</div>
+
+<button class="btn btn-primary" style="width:100%;" onclick="app.dashboard.saveGroupBatch()">✅ Save Group Members</button>
         </div>
         <div id="group-display-area" style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;"></div>
     </div>
@@ -1128,42 +1137,64 @@ card.innerHTML = `
             loadGroups: async () => {
                 const gSnap = await getDocs(query(collection(db, "groups"), where("teacherId", "==", state.currentUser.uid)));
                 const sSnap = await getDocs(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid)));
+                
                 const gSelect = document.getElementById('group-select-list');
                 const gAssignSelect = document.getElementById('assign-group-select');
-                const sSelect = document.getElementById('student-select-list');
+                const checkboxArea = document.getElementById('group-checkbox-container');
                 const display = document.getElementById('group-display-area');
 
+                // Fill Group Dropdowns
                 const groupOptions = gSnap.docs.map(d => `<option value="${d.id}">${d.data().name}</option>`).join('');
-                if(gSelect) gSelect.innerHTML = '<option value="">Select Group...</option>' + groupOptions;
+                gSelect.innerHTML = '<option value="">Select Group to Edit...</option>' + groupOptions;
                 if(gAssignSelect) gAssignSelect.innerHTML = '<option value="">Choose Group...</option>' + groupOptions;
-                if(sSelect) sSelect.innerHTML = sSnap.docs.map(d => `<option value="${d.id}">${d.data().name}</option>`).join('');
 
-                if(display) {
-                    display.innerHTML = '';
-                    gSnap.forEach(gDoc => {
-                        const g = gDoc.data();
-                        const members = sSnap.docs.filter(s => g.studentIds.includes(s.id));
-                        display.innerHTML += `
-                            <div class="card" style="margin:0; border-left: 4px solid var(--primary);">
-                                <div style="display:flex; justify-content:space-between;"><strong>${g.name}</strong><button class="btn btn-danger btn-sm" style="padding:2px 5px;" onclick="app.dashboard.deleteGroup('${gDoc.id}')">🗑️</button></div>
-                                <div style="font-size:0.8rem; margin-top:10px; color:var(--text-light);">${members.map(m => `<div>• ${m.data().name} <span style="float:right; cursor:pointer;" onclick="app.dashboard.removeFromGroup('${gDoc.id}', '${m.id}')">✕</span></div>`).join('') || 'No students'}</div>
-                            </div>`;
-                    });
+                // Handle Checkbox List for Batch Assigning
+                const selectedGid = gSelect.value;
+                if (selectedGid) {
+                    const currentGroup = gSnap.docs.find(d => d.id === selectedGid).data();
+                    checkboxArea.innerHTML = sSnap.docs.map(sDoc => {
+                        const s = sDoc.data();
+                        const isChecked = currentGroup.studentIds.includes(sDoc.id) ? 'checked' : '';
+                        return `<label style="display:block; margin-bottom:5px; cursor:pointer;">
+                            <input type="checkbox" class="group-stu-cb" value="${sDoc.id}" ${isChecked}> ${s.name} (Gr ${s.grade})
+                        </label>`;
+                    }).join('');
                 }
+
+                // Draw Visual Cards
+                display.innerHTML = '';
+                gSnap.forEach(gDoc => {
+                    const g = gDoc.data();
+                    const members = sSnap.docs.filter(s => g.studentIds.includes(s.id));
+                    display.innerHTML += `
+                        <div class="card" style="margin:0; border-left: 4px solid var(--primary);">
+                            <div style="display:flex; justify-content:space-between;"><strong>${g.name}</strong><button class="btn btn-danger btn-sm" style="padding:2px 5px;" onclick="app.dashboard.deleteGroup('${gDoc.id}')">🗑️</button></div>
+                            <div style="font-size:0.8rem; margin-top:10px; color:var(--text-light);">${members.map(m => `• ${m.data().name}`).join(', ') || 'No members'}</div>
+                        </div>`;
+                });
             },
 
-            addStudentToGroup: async () => {
+            saveGroupBatch: async () => {
                 const gid = document.getElementById('group-select-list').value;
-                const sid = document.getElementById('student-select-list').value;
-                if(!gid || !sid) return;
-                await updateDoc(doc(db, "groups", gid), { studentIds: arrayUnion(sid) });
-                app.dashboard.loadGroups();
-                ui.toast("Added!");
-            },
+                if(!gid) return alert("Please select a group first!");
 
-            removeFromGroup: async (gid, sid) => {
-                await updateDoc(doc(db, "groups", gid), { studentIds: arrayRemove(sid) });
-                app.dashboard.loadGroups();
+                // Get all checked student IDs
+                const checkedCheckboxes = document.querySelectorAll('.group-stu-cb:checked');
+                const selectedIds = Array.from(checkedCheckboxes).map(cb => cb.value);
+
+                ui.spinner(true);
+                try {
+                    // Update the group's studentIds array with our new list
+                    await updateDoc(doc(db, "groups", gid), { 
+                        studentIds: selectedIds 
+                    });
+                    ui.toast("Group members updated!");
+                    app.dashboard.loadGroups(); // Refresh the UI
+                } catch (e) {
+                    console.error(e);
+                    alert("Error saving group.");
+                }
+                ui.spinner(false);
             },
 
             deleteGroup: async (id) => {
