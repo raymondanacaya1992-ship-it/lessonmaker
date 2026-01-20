@@ -875,57 +875,63 @@ card.innerHTML = `
                 if(t === 'shop') dashboard.loadShopManager();
             },
             loadMonitor: () => {
-    const filterGrade = document.getElementById('monitor-filter-grade').value;
+                const filterGrade = document.getElementById('monitor-filter-grade').value;
+                const stuckBody = document.getElementById('monitor-stuck-body'); 
+                const trackBody = document.getElementById('monitor-track-body');
 
-    onSnapshot(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid)), (snap) => {
-        const stuckBody = document.getElementById('monitor-stuck-body'); 
-        const trackBody = document.getElementById('monitor-track-body');
-        
-        stuckBody.innerHTML = '';
-        trackBody.innerHTML = '';
-        
-        snap.forEach(d => {
-            const s = d.data();
-            if (filterGrade !== "" && s.grade !== filterGrade) return; 
+                // 1. Visual Feedback: Clear the tables so the teacher sees it "refreshing"
+                stuckBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Refreshing...</td></tr>';
+                trackBody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Refreshing...</td></tr>';
 
-            // CALCULATE ACCURACY
-            // We pull total and correct from the live session data
-            const total = s.currentSessionTotal || 0;
-            const correct = s.currentSessionCorrect || 0;
-            const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+                // 2. Kill the old listener if it exists to save battery/data
+                if (window.activeMonitorListener) {
+                    window.activeMonitorListener(); // This stops the old "pipeline"
+                }
 
-            // IDENTIFY GUESSERS
-            // If they have answered more than 5 questions and accuracy is under 40%
-            const isGuessing = total > 5 && accuracy < 40;
-            const isStruggling = s.currentSessionScore > 0 && s.currentSessionScore < 50;
-            const isIdle = s.status === "Idle" || !s.status;
+                // 3. Start the new "Live Pipeline"
+                window.activeMonitorListener = onSnapshot(query(collection(db, "students"), where("teacherId", "==", state.currentUser.uid)), (snap) => {
+                    stuckBody.innerHTML = '';
+                    trackBody.innerHTML = '';
+                    
+                    snap.forEach(d => {
+                        const s = d.data();
+                        
+                        // Apply the Grade Filter
+                        if (filterGrade !== "" && s.grade !== filterGrade) return; 
 
-            const rowHTML = `<tr>
-                <td style="font-weight:bold;">
-                    ${s.name}
-                    ${isGuessing ? '<div style="font-size:0.6rem; color:var(--danger); background:#fee2e2; padding:2px 4px; border-radius:4px; display:inline-block;">⚠️ GUESSING</div>' : ''}
-                </td>
-                <td style="font-size:0.75rem;">${s.status || 'Idle'}</td>
-                <td style="font-weight:800; color: ${isStruggling ? 'var(--danger)' : 'var(--secondary)'};">
-                    ${s.currentSessionScore || 0}%
-                </td>
-                <td>
-                    <div style="font-size:0.8rem;">${accuracy}%</div>
-                    <div style="font-size:0.6rem; color:#94a3b8;">(${correct}/${total})</div>
-                </td>
-            </tr>`;
+                        // Calculate Accuracy & Guessing
+                        const total = s.currentSessionTotal || 0;
+                        const correct = s.currentSessionCorrect || 0;
+                        const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+                        const isGuessing = total > 5 && accuracy < 40;
+                        const isStruggling = s.currentSessionScore > 0 && s.currentSessionScore < 50;
+                        const isIdle = s.status === "Idle" || !s.status;
 
-            if (isStruggling || isGuessing) {
-                stuckBody.innerHTML += rowHTML;
-            } else if (!isIdle) {
-                trackBody.innerHTML += rowHTML;
-            }
-        });
+                        const rowHTML = `<tr>
+                            <td style="font-weight:bold;">
+                                ${s.name}
+                                ${isGuessing ? '<div style="font-size:0.6rem; color:var(--danger); background:#fee2e2; padding:2px 4px; border-radius:4px; display:inline-block; margin-left:5px;">⚠️ GUESSING</div>' : ''}
+                            </td>
+                            <td style="font-size:0.75rem;">${s.status || 'Idle'}</td>
+                            <td style="font-weight:800; color: ${isStruggling ? 'var(--danger)' : 'var(--secondary)'};">${s.currentSessionScore || 0}%</td>
+                            <td>
+                                <div style="font-size:0.8rem;">${accuracy}%</div>
+                                <div style="font-size:0.6rem; color:#94a3b8;">(${correct}/${total})</div>
+                            </td>
+                        </tr>`;
 
-        if (stuckBody.innerHTML === '') stuckBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:20px;">No students struggling.</td></tr>';
-        if (trackBody.innerHTML === '') trackBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:20px;">No active students.</td></tr>';
-    });
-},
+                        if (isStruggling || isGuessing) {
+                            stuckBody.innerHTML += rowHTML;
+                        } else if (!isIdle) {
+                            trackBody.innerHTML += rowHTML;
+                        }
+                    });
+
+                    // Empty State Messages
+                    if (stuckBody.innerHTML === '') stuckBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:20px;">No students struggling.</td></tr>';
+                    if (trackBody.innerHTML === '') trackBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#94a3b8; padding:20px;">No active students.</td></tr>';
+                });
+            },
             adjustPoints: async (id, amt) => {
                 await updateDoc(doc(db, "students", id), { 
                     pointsBalance: increment(amt), 
